@@ -123,3 +123,7 @@ if (type == OBJ_BLOB) type_str = "blob";
     free(full);
     return 0;
 }
+
+int object_read(const ObjectID *id, ObjectType *type_out, void **data_out, size_t *len_out) {
+    char path[512];
+    object_path(id, path, sizeof(path));
