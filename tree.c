@@ -125,8 +125,7 @@ int tree_from_index(ObjectID *id_out) {
 
     Tree tree = {0};
 
-    for (int i = 0; i < index.count; i++) 
-    {
+    for (int i = 0; i < index.count; i++) {
     const char *path = index.entries[i].path;
 
     char *slash = strchr(path, '/');
@@ -136,6 +135,11 @@ int tree_from_index(ObjectID *id_out) {
         e->mode = index.entries[i].mode;
         strcpy(e->name, path);
         e->hash = index.entries[i].hash;
+    } else {
+        char dirname[256];
+        size_t len = slash - path;
+        strncpy(dirname, path, len);
+        dirname[len] = '\0';
     }
 }
 
