@@ -127,3 +127,26 @@ if (type == OBJ_BLOB) type_str = "blob";
 int object_read(const ObjectID *id, ObjectType *type_out, void **data_out, size_t *len_out) {
     char path[512];
     object_path(id, path, sizeof(path));
+
+    FILE *f = fopen(path, "rb");
+    if (!f) return -1;
+
+    fseek(f, 0, SEEK_END);
+    long size = ftell(f);
+    rewind(f);
+
+    char *buffer = malloc(size);
+    if (!buffer) {
+        fclose(f);
+        return -1;
+    }
+
+    fread(buffer, 1, size, f);
+    fclose(f);
+
+    ObjectID verify;
+    compute_hash(buffer, size, &verify);
+    if (memcmp(&verify, id, sizeof(ObjectID)) != 0) {
+        free(buffer);
+        return -1;
+    }
