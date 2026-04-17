@@ -63,3 +63,63 @@ int object_exists(const ObjectID *id) {
 int object_write(ObjectType type, const void *data, size_t len, ObjectID *id_out) {
     char header[64];
     const char *type_str;
+if (type == OBJ_BLOB) type_str = "blob";
+    else if (type == OBJ_TREE) type_str = "tree";
+    else if (type == OBJ_COMMIT) type_str = "commit";
+    else return -1;
+
+    int header_len = snprintf(header, sizeof(header), "%s %zu", type_str, len) + 1;
+
+    size_t full_len = header_len + len;
+    char *full = malloc(full_len);
+    if (!full) return -1;
+
+    memcpy(full, header, header_len);
+    memcpy(full + header_len, data, len);
+
+    compute_hash(full, full_len, id_out);
+
+    if (object_exists(id_out)) {
+        free(full);
+        return 0;
+    }
+
+    char path[512];
+    object_path(id_out, path, sizeof(path));
+
+    char dir[512];
+    strncpy(dir, path, sizeof(dir));
+    char *slash = strrchr(dir, '/');
+    if (slash) *slash = '\0';
+
+    mkdir(dir, 0755);
+
+    char temp_path[512];
+    snprintf(temp_path, sizeof(temp_path), "%s/tmpXXXXXX", dir);
+
+    int fd = mkstemp(temp_path);
+    if (fd < 0) {
+        free(full);
+        return -1;
+    }
+
+    if (write(fd, full, full_len) != (ssize_t)full_len) {
+        close(fd);
+        free(full);
+        return -1;
+    }
+
+    fsync(fd);
+    close(fd);
+
+    rename(temp_path, path);
+
+    int dir_fd = open(dir, O_DIRECTORY);
+    if (dir_fd >= 0) {
+        fsync(dir_fd);
+        close(dir_fd);
+    }
+
+    free(full);
+    return 0;
+}
