@@ -197,41 +197,51 @@ int commit_create(const char *message, ObjectID *commit_id_out) {
     Commit commit;
     memset(&commit, 0, sizeof(commit));
 
-    // Step 1: Build tree
+    // Step 1: Build tree from staged index entries
     if (tree_from_index(&commit.tree) != 0) {
         fprintf(stderr, "error: failed to build tree from index\n");
         return -1;
     }
 
+    // Step 2: Try to read current HEAD as parent.
+    // head_read returns -1 if no commits exist yet — that's fine for the
+    // first commit; we just leave has_parent = 0.
+    if (head_read(&commit.parent) == 0) {
+        commit.has_parent = 1;
+    } else {
+        commit.has_parent = 0;
+    }
+
+    // Step 3: Fill in author and timestamp
+    snprintf(commit.author, sizeof(commit.author), "%s", pes_author());
+    commit.timestamp = (uint64_t)time(NULL);
+    snprintf(commit.message, sizeof(commit.message), "%s", message);
+
+    // Step 4: Serialize the commit struct to text
+    void *data = NULL;
+    size_t len  = 0;
+    if (commit_serialize(&commit, &data, &len) != 0) {
+        fprintf(stderr, "error: failed to serialize commit\n");
+        return -1;
+    }
+
+    // Step 5: Write serialized commit as an object and get its hash
+    // Pass len+1 to include the null terminator that commit_serialize appends.
+    // object_read returns raw bytes without adding a '\0', so commit_parse
+    // needs the terminator to be part of the stored data, or it reads past
+    // the end of the buffer into garbage when extracting the message.
+    if (object_write(OBJ_COMMIT, data, len + 1, commit_id_out) != 0) {
+        free(data);
+        fprintf(stderr, "error: failed to write commit object\n");
+        return -1;
+    }
+    free(data);
+
+    // Step 6: Move HEAD (branch ref) to point at the new commit
+    if (head_update(commit_id_out) != 0) {
+        fprintf(stderr, "error: failed to update HEAD\n");
+        return -1;
+    }
+
     return 0;
 }
-
-// Step 2: Read HEAD for parent
-if (head_read(&commit.parent) == 0) {
-    commit.has_parent = 1;
-} else {
-    commit.has_parent = 0;
-}
-
-// Step 3: Metadata
-snprintf(commit.author, sizeof(commit.author), "%s", pes_author());
-commit.timestamp = (uint64_t)time(NULL);
-snprintf(commit.message, sizeof(commit.message), "%s", message);
-
-// Step 4: Serialize
-void *data = NULL;
-size_t len = 0;
-
-if (commit_serialize(&commit, &data, &len) != 0) {
-    fprintf(stderr, "error: failed to serialize commit\n");
-    return -1;
-}
-
-// Step 5: Write object (IMPORTANT: len + 1)
-if (object_write(OBJ_COMMIT, data, len + 1, commit_id_out) != 0) {
-    free(data);
-    fprintf(stderr, "error: failed to write commit object\n");
-    return -1;
-}
-
-free(data);
