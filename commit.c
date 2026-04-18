@@ -217,3 +217,21 @@ if (head_read(&commit.parent) == 0) {
 snprintf(commit.author, sizeof(commit.author), "%s", pes_author());
 commit.timestamp = (uint64_t)time(NULL);
 snprintf(commit.message, sizeof(commit.message), "%s", message);
+
+// Step 4: Serialize
+void *data = NULL;
+size_t len = 0;
+
+if (commit_serialize(&commit, &data, &len) != 0) {
+    fprintf(stderr, "error: failed to serialize commit\n");
+    return -1;
+}
+
+// Step 5: Write object (IMPORTANT: len + 1)
+if (object_write(OBJ_COMMIT, data, len + 1, commit_id_out) != 0) {
+    free(data);
+    fprintf(stderr, "error: failed to write commit object\n");
+    return -1;
+}
+
+free(data);
