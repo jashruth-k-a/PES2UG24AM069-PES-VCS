@@ -217,13 +217,17 @@ int index_add(Index *index, const char *path) {
     long size = ftell(f);
     rewind(f);
 
-    void *data = malloc(size);
-    fread(data, 1, size, f);
+    void *data = NULL;
+    if (size > 0) {
+        data = malloc(size);
+        fread(data, 1, size, f);
+    }
+
     fclose(f);
 
     ObjectID id;
     if (object_write(OBJ_BLOB, data, size, &id) != 0) {
-        free(data);
+        if (data) free(data);
         return -1;
     }
 
@@ -241,6 +245,6 @@ int index_add(Index *index, const char *path) {
     e->hash = id;
     strcpy(e->path, path);
 
-    free(data);
+    if (data) free(data);
     return index_save(index);
 }
