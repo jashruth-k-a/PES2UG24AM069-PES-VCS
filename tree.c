@@ -115,85 +115,38 @@ int tree_serialize(const Tree *tree, void **data_out, size_t *len_out) {
 }
 
 // ─── TODO: Implement these ──────────────────────────────────────────────────
-#include "index.h"
+#include <stdio.h>
 
-static int build_tree_level(IndexEntry *entries, int count, const char *base, ObjectID *id_out) {
+int tree_from_index(ObjectID *id_out) {
+    FILE *f = fopen(".pes/index", "r");
+    if (!f) return -1;
+
     Tree tree = {0};
 
-    for (int i = 0; i < count; i++) {
-        const char *path = entries[i].path;
+    char path[256], hash_hex[65];
+    unsigned int mode;
+    long mtime;
+    size_t size;
 
-        if (base && strncmp(path, base, strlen(base)) != 0) continue;
+    while (fscanf(f, "%o %64s %ld %zu %s", &mode, hash_hex, &mtime, &size, path) == 5) {
+        TreeEntry *e = &tree.entries[tree.count++];
 
-        const char *subpath = base ? path + strlen(base) : path;
-        char *slash = strchr(subpath, '/');
+        e->mode = mode;
+        strcpy(e->name, path);
 
-        if (!slash) {
-            TreeEntry *e = &tree.entries[tree.count++];
-            e->mode = entries[i].mode;
-            strcpy(e->name, subpath);
-            e->hash = entries[i].hash;
-        } else {
-            char dirname[256];
-            size_t len = slash - subpath;
-            strncpy(dirname, subpath, len);
-            dirname[len] = '\0';
-
-            int already = 0;
-            for (int j = 0; j < tree.count; j++) {
-                if (strcmp(tree.entries[j].name, dirname) == 0) {
-                    already = 1;
-                    break;
-                }
-            }
-            if (already) continue;
-
-            IndexEntry subentries[MAX_INDEX_ENTRIES];
-            int subcount = 0;
-
-            for (int j = 0; j < count; j++) {
-                if (base && strncmp(entries[j].path, base, strlen(base)) != 0) continue;
-
-                const char *subp = base ? entries[j].path + strlen(base) : entries[j].path;
-
-                if (strncmp(subp, dirname, strlen(dirname)) == 0 &&
-                    subp[strlen(dirname)] == '/') {
-                    subentries[subcount++] = entries[j];
-                }
-            }
-
-            char newbase[512];
-            if (base)
-                snprintf(newbase, sizeof(newbase), "%s%s/", base, dirname);
-            else
-                snprintf(newbase, sizeof(newbase), "%s/", dirname);
-
-            ObjectID subtree_id;
-            if (build_tree_level(subentries, subcount, newbase, &subtree_id) != 0)
-                return -1;
-
-            TreeEntry *e = &tree.entries[tree.count++];
-            e->mode = MODE_DIR;
-            strcpy(e->name, dirname);
-            e->hash = subtree_id;
-        }
+        hex_to_hash(hash_hex, &e->hash);
     }
+
+    fclose(f);
 
     void *data;
     size_t len;
+
     if (tree_serialize(&tree, &data, &len) != 0)
         return -1;
 
     int res = object_write(OBJ_TREE, data, len, id_out);
     free(data);
+
     return res;
-}
-
-int tree_from_index(ObjectID *id_out) {
-    Index index;
-
-    if (index_load(&index) != 0)
-        return -1;
-
-    return build_tree_level(index.entries, index.count, NULL, id_out);
 }
