@@ -212,3 +212,8 @@ if (head_read(&commit.parent) == 0) {
 } else {
     commit.has_parent = 0;
 }
+
+// Step 3: Metadata
+snprintf(commit.author, sizeof(commit.author), "%s", pes_author());
+commit.timestamp = (uint64_t)time(NULL);
+snprintf(commit.message, sizeof(commit.message), "%s", message);
