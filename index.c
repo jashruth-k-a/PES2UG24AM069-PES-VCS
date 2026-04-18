@@ -210,6 +210,8 @@ int index_save(const Index *index) {
 //
 // Returns 0 on success, -1 on error.
 int index_add(Index *index, const char *path) {
+    if (index_load(index) != 0) return -1;
+
     FILE *f = fopen(path, "rb");
     if (!f) return -1;
 
@@ -217,17 +219,18 @@ int index_add(Index *index, const char *path) {
     long size = ftell(f);
     rewind(f);
 
-    void *data = NULL;
-    if (size > 0) {
-        data = malloc(size);
-        fread(data, 1, size, f);
+    void *data = malloc(size);
+    if (!data && size > 0) {
+        fclose(f);
+        return -1;
     }
 
+    fread(data, 1, size, f);
     fclose(f);
 
     ObjectID id;
     if (object_write(OBJ_BLOB, data, size, &id) != 0) {
-        if (data) free(data);
+        free(data);
         return -1;
     }
 
@@ -236,6 +239,10 @@ int index_add(Index *index, const char *path) {
 
     IndexEntry *e = index_find(index, path);
     if (!e) {
+        if (index->count >= MAX_INDEX_ENTRIES) {
+            free(data);
+            return -1;
+        }
         e = &index->entries[index->count++];
     }
 
@@ -245,6 +252,7 @@ int index_add(Index *index, const char *path) {
     e->hash = id;
     strcpy(e->path, path);
 
-    if (data) free(data);
+    free(data);
+
     return index_save(index);
 }
