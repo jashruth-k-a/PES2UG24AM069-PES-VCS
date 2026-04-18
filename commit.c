@@ -205,3 +205,10 @@ int commit_create(const char *message, ObjectID *commit_id_out) {
 
     return 0;
 }
+
+// Step 2: Read HEAD for parent
+if (head_read(&commit.parent) == 0) {
+    commit.has_parent = 1;
+} else {
+    commit.has_parent = 0;
+}
